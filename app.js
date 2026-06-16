@@ -1,57 +1,46 @@
 /* ============================================================
-   حاسبة التكاليف التدريبية — app.js
-   Training Cost Calculator — Main Application Logic
+   حاسبة التكاليف التدريبية — app.js  v1.1
    ============================================================ */
-
 'use strict';
 
-// ────────────────────────────────
-// State
-// ────────────────────────────────
 let items = [];
 let deferredInstallPrompt = null;
-
-// ────────────────────────────────
-// Helpers
-// ────────────────────────────────
 const $ = id => document.getElementById(id);
 
-function formatNumber(n) {
-  return Number(n).toLocaleString('ar-IQ');
-}
+/* ─── Helpers ─────────────────────────────────────────────── */
+function fmt(n) { return Number(n).toLocaleString('ar-IQ'); }
 
-function showToast(msg, type = 'info', duration = 2800) {
+function showToast(msg, type = 'info', ms = 2600) {
   const t = $('toast');
   t.textContent = msg;
   t.className = 'toast show ' + type;
-  clearTimeout(t._timer);
-  t._timer = setTimeout(() => { t.className = 'toast'; }, duration);
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.className = 'toast'; }, ms);
 }
 
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 }
 
-function saveToLocalStorage() {
+function save() {
+  try { localStorage.setItem('tc_items', JSON.stringify(items)); } catch (_) {}
+}
+
+function load() {
   try {
-    localStorage.setItem('training_cost_items', JSON.stringify(items));
-  } catch (e) { /* quota exceeded or private mode */ }
-}
-
-function loadFromLocalStorage() {
-  try {
-    const raw = localStorage.getItem('training_cost_items');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch (e) { /* ignore */ }
+    const r = localStorage.getItem('tc_items');
+    if (r) { const p = JSON.parse(r); if (Array.isArray(p)) return p; }
+  } catch (_) {}
   return [];
 }
 
-// ────────────────────────────────
-// Core Functions
-// ────────────────────────────────
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ─── Core ─────────────────────────────────────────────────── */
 function addItem() {
   const nameEl  = $('itemName');
   const priceEl = $('itemPrice');
@@ -60,66 +49,42 @@ function addItem() {
 
   const name  = nameEl.value.trim();
   const price = parseFloat(priceEl.value);
-  const qty   = parseInt(qtyEl.value) || 1;
+  const qty   = Math.max(1, parseInt(qtyEl.value) || 1);
   const unit  = unitEl.value;
 
-  if (!name) {
-    showToast('⚠️ يرجى إدخال اسم المادة', 'error');
-    nameEl.focus();
-    return;
-  }
-  if (isNaN(price) || price < 0) {
-    showToast('⚠️ يرجى إدخال سعر صحيح', 'error');
-    priceEl.focus();
-    return;
-  }
+  if (!name)              { showToast('⚠️ أدخل اسم المادة', 'error'); nameEl.focus(); return; }
+  if (isNaN(price)||price<0){ showToast('⚠️ أدخل سعراً صحيحاً', 'error'); priceEl.focus(); return; }
 
-  const item = {
-    id: generateId(),
-    name,
-    price,
-    qty,
-    unit,
-    total: price * qty,
-    addedAt: new Date().toISOString()
-  };
+  items.push({ id: uid(), name, price, qty, unit, total: price * qty, at: new Date().toISOString() });
+  save();
+  render();
 
-  items.push(item);
-  saveToLocalStorage();
-  renderItems();
-
-  // Reset fields
   nameEl.value  = '';
   priceEl.value = '';
   qtyEl.value   = '1';
   nameEl.focus();
-
-  showToast('✅ تمت الإضافة: ' + name, 'success');
+  showToast('✅ أُضيفت: ' + name, 'success');
 }
 
 function deleteItem(id) {
-  const idx = items.findIndex(i => i.id === id);
-  if (idx === -1) return;
-  const name = items[idx].name;
-  items.splice(idx, 1);
-  saveToLocalStorage();
-  renderItems();
-  showToast('🗑️ تم حذف: ' + name);
+  const i = items.findIndex(x => x.id === id);
+  if (i < 0) return;
+  const nm = items[i].name;
+  items.splice(i, 1);
+  save();
+  render();
+  showToast('🗑️ حُذفت: ' + nm);
 }
 
 function clearAll() {
-  if (items.length === 0) return;
-  if (!confirm('هل تريد حذف جميع المواد؟ لا يمكن التراجع عن هذا الإجراء.')) return;
-  items = [];
-  saveToLocalStorage();
-  renderItems();
+  if (!items.length) return;
+  if (!confirm('هل تريد حذف جميع المواد؟')) return;
+  items = []; save(); render();
   showToast('تم مسح القائمة', 'info');
 }
 
-// ────────────────────────────────
-// Render
-// ────────────────────────────────
-function renderItems() {
+/* ─── Render ───────────────────────────────────────────────── */
+function render() {
   const listEl     = $('itemsList');
   const emptyEl    = $('emptyState');
   const countEl    = $('itemCount');
@@ -128,375 +93,292 @@ function renderItems() {
   const totalQty   = $('totalQty');
   const grandTotal = $('grandTotal');
 
-  // Clear
   listEl.innerHTML = '';
 
-  if (items.length === 0) {
-    emptyEl.style.display = 'block';
+  if (!items.length) {
+    emptyEl.style.display  = 'block';
     clearBtn.style.display = 'none';
-    countEl.textContent = '0';
+    countEl.textContent    = '0';
     totalItems.textContent = '0';
-    totalQty.textContent = '0';
+    totalQty.textContent   = '0';
     grandTotal.textContent = '0';
     return;
   }
 
-  emptyEl.style.display = 'none';
+  emptyEl.style.display  = 'none';
   clearBtn.style.display = 'inline-flex';
-  countEl.textContent = items.length;
+  countEl.textContent    = items.length;
 
-  let sumTotal = 0;
-  let sumQty   = 0;
+  let sumTotal = 0, sumQty = 0;
 
-  items.forEach((item, index) => {
+  items.forEach((item, idx) => {
     sumTotal += item.total;
     sumQty   += item.qty;
 
     const card = document.createElement('div');
     card.className = 'item-card';
-    card.id = 'item-' + item.id;
-
     card.innerHTML = `
-      <div class="item-number">${index + 1}</div>
+      <div class="item-num">${idx + 1}</div>
       <div class="item-body">
         <div class="item-name" title="${escHtml(item.name)}">${escHtml(item.name)}</div>
-        <div class="item-details">
-          <span class="item-qty-unit">${item.qty} ${escHtml(item.unit)}</span>
-          <span class="item-unit-price">سعر الوحدة: ${formatNumber(item.price)} د.ع</span>
+        <div class="item-meta">
+          <span class="tag">${item.qty} ${escHtml(item.unit)}</span>
+          <span class="tag">${fmt(item.price)} د.ع/وحدة</span>
         </div>
       </div>
       <div class="item-right">
-        <button class="btn-delete" onclick="deleteItem('${item.id}')" title="حذف المادة" aria-label="حذف ${escHtml(item.name)}">✕</button>
-        <div style="text-align:left">
-          <div class="item-price">${formatNumber(item.total)}</div>
+        <button class="btn-delete" onclick="deleteItem('${item.id}')" aria-label="حذف">✕</button>
+        <div>
+          <div class="item-price">${fmt(item.total)}</div>
           <div class="item-price-sub">دينار عراقي</div>
         </div>
-      </div>
-    `;
-
+      </div>`;
     listEl.appendChild(card);
   });
 
-  // Update summary
   totalItems.textContent = items.length;
-  totalQty.textContent   = formatNumber(sumQty);
-  grandTotal.textContent = formatNumber(sumTotal);
+  totalQty.textContent   = fmt(sumQty);
+  grandTotal.textContent = fmt(sumTotal);
 }
 
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-// ────────────────────────────────
-// JSON Save / Import
-// ────────────────────────────────
+/* ─── JSON Save / Import ───────────────────────────────────── */
 function saveJSON() {
-  if (items.length === 0) {
-    showToast('لا توجد بيانات للحفظ', 'error');
-    return;
-  }
-
+  if (!items.length) { showToast('لا توجد بيانات للحفظ', 'error'); return; }
   const data = {
-    appName: 'حاسبة التكاليف التدريبية',
-    version: '1.0',
+    appName: 'حاسبة التكاليف التدريبية', version: '1.1',
     savedAt: new Date().toLocaleString('ar-IQ'),
     totalItems: items.length,
-    grandTotal: items.reduce((s, i) => s + i.total, 0),
-    items: items
+    grandTotal: items.reduce((s,i) => s + i.total, 0),
+    items
   };
-
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  const date = new Date().toISOString().slice(0, 10);
-  a.href     = url;
-  a.download = `تكاليف_تدريبية_${date}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-
-  showToast('💾 تم حفظ الملف بنجاح', 'success');
+  dlBlob(JSON.stringify(data, null, 2), 'application/json',
+    `تكاليف_${today()}.json`);
+  showToast('💾 تم الحفظ بنجاح', 'success');
 }
 
 function importJSON(event) {
   const file = event.target.files[0];
   if (!file) return;
-
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = e => {
     try {
       const data = JSON.parse(e.target.result);
-      let imported = [];
-
-      if (Array.isArray(data)) {
-        imported = data;
-      } else if (data.items && Array.isArray(data.items)) {
-        imported = data.items;
-      } else {
-        throw new Error('تنسيق غير مدعوم');
-      }
-
-      // Validate each item
-      imported = imported.filter(i => i.name && i.price !== undefined);
-      // Ensure IDs and totals
-      imported = imported.map(i => ({
-        id: i.id || generateId(),
-        name: String(i.name),
-        price: parseFloat(i.price) || 0,
-        qty: parseInt(i.qty) || 1,
-        unit: i.unit || 'قطعة',
-        total: parseFloat(i.total) || (parseFloat(i.price) * (parseInt(i.qty) || 1)),
-        addedAt: i.addedAt || new Date().toISOString()
-      }));
-
-      if (imported.length === 0) {
-        showToast('⚠️ الملف لا يحتوي على بيانات صالحة', 'error');
-        return;
-      }
+      let imported = Array.isArray(data) ? data : (data.items || []);
+      imported = imported
+        .filter(i => i.name && i.price !== undefined)
+        .map(i => ({
+          id: i.id || uid(),
+          name: String(i.name),
+          price: parseFloat(i.price) || 0,
+          qty: parseInt(i.qty) || 1,
+          unit: i.unit || 'قطعة',
+          total: parseFloat(i.total) || (parseFloat(i.price) * (parseInt(i.qty) || 1)),
+          at: i.at || new Date().toISOString()
+        }));
+      if (!imported.length) { showToast('⚠️ لا توجد بيانات صالحة', 'error'); return; }
 
       const merge = items.length > 0 &&
-        confirm(`لديك ${items.length} مادة حالية. هل تريد الدمج مع الملف المستورد؟\nاختر "إلغاء" للاستبدال.`);
-
-      if (merge) {
-        items = [...items, ...imported];
-      } else {
-        items = imported;
-      }
-
-      saveToLocalStorage();
-      renderItems();
-      showToast(`✅ تم استيراد ${imported.length} مادة بنجاح`, 'success');
-    } catch (err) {
-      showToast('❌ خطأ في قراءة الملف: ' + err.message, 'error');
-    }
+        confirm(`لديك ${items.length} مادة. دمج مع الملف الجديد؟\n(إلغاء = استبدال)`);
+      items = merge ? [...items, ...imported] : imported;
+      save(); render();
+      showToast(`✅ استُورد ${imported.length} مادة`, 'success');
+    } catch (err) { showToast('❌ خطأ في الملف: ' + err.message, 'error'); }
   };
   reader.readAsText(file);
   event.target.value = '';
 }
 
-// ────────────────────────────────
-// Excel Export (CSV → XLS trick)
-// ────────────────────────────────
-function exportExcel() {
-  if (items.length === 0) {
-    showToast('لا توجد بيانات للتصدير', 'error');
-    return;
-  }
+/* ─── CSV Export (Excel-compatible, no libraries) ─────────── */
+function exportCSV() {
+  if (!items.length) { showToast('لا توجد بيانات للتصدير', 'error'); return; }
 
-  // Build HTML table that Excel can open
-  const date = new Date().toLocaleDateString('ar-IQ');
   const grandTotal = items.reduce((s, i) => s + i.total, 0);
+  const date = new Date().toLocaleDateString('ar-IQ');
 
-  let html = `
-<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:x="urn:schemas-microsoft-com:office:excel"
-      xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-  <meta charset="utf-8">
-  <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>
-    <x:ExcelWorksheet><x:Name>التكاليف التدريبية</x:Name>
-    <x:WorksheetOptions><x:DisplayRightToLeft/></x:WorksheetOptions>
-    </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-</head>
-<body dir="rtl">
-<table border="1" cellpadding="6" style="font-family:Arial;direction:rtl;border-collapse:collapse;">
-  <tr style="background:#1C3557;color:white;font-weight:bold;">
-    <td colspan="6" style="text-align:center;font-size:14px;">حاسبة التكاليف التدريبية — ${date}</td>
-  </tr>
-  <tr style="background:#E36F1E;color:white;font-weight:bold;">
-    <td>#</td>
-    <td>اسم المادة</td>
-    <td>سعر الوحدة (دينار)</td>
-    <td>الكمية</td>
-    <td>الوحدة</td>
-    <td>الإجمالي (دينار)</td>
-  </tr>`;
+  // Build CSV rows — wrap each field in quotes to handle commas & Arabic
+  const q = s => `"${String(s).replace(/"/g, '""')}"`;
 
-  items.forEach((item, idx) => {
-    html += `
-  <tr style="background:${idx % 2 === 0 ? '#f9f9f9' : 'white'}">
-    <td style="text-align:center">${idx + 1}</td>
-    <td>${escHtml(item.name)}</td>
-    <td style="text-align:left">${item.price.toLocaleString()}</td>
-    <td style="text-align:center">${item.qty}</td>
-    <td style="text-align:center">${escHtml(item.unit)}</td>
-    <td style="text-align:left;font-weight:bold">${item.total.toLocaleString()}</td>
-  </tr>`;
-  });
+  const rows = [
+    // Header info rows
+    [q('حاسبة التكاليف التدريبية'), q(date), '', '', ''],
+    ['', '', '', '', ''],
+    // Column headers
+    [q('#'), q('اسم المادة'), q('سعر الوحدة (دينار)'), q('الكمية'), q('الوحدة'), q('الإجمالي (دينار)')],
+    // Data rows
+    ...items.map((item, idx) => [
+      q(idx + 1),
+      q(item.name),
+      q(item.price),
+      q(item.qty),
+      q(item.unit),
+      q(item.total)
+    ]),
+    // Empty row + total
+    ['', '', '', '', '', ''],
+    [q('المجموع الكلي'), '', '', q(items.reduce((s,i) => s+i.qty, 0)), '', q(grandTotal)]
+  ];
 
-  html += `
-  <tr style="background:#1C3557;color:white;font-weight:bold;">
-    <td colspan="3" style="text-align:center">المجموع الكلي</td>
-    <td style="text-align:center">${items.reduce((s, i) => s + i.qty, 0)}</td>
-    <td></td>
-    <td style="text-align:left;font-size:13px">${grandTotal.toLocaleString()} دينار</td>
-  </tr>
+  const csvContent = rows.map(r => r.join(',')).join('\r\n');
+
+  // UTF-8 BOM ensures Arabic shows correctly in Excel on all platforms
+  const BOM = '\uFEFF';
+  dlBlob(BOM + csvContent, 'text/csv;charset=utf-8', `تكاليف_${today()}.csv`);
+  showToast('📊 تم تصدير ملف CSV بنجاح', 'success');
+}
+
+/* ─── Print ────────────────────────────────────────────────── */
+function printList() {
+  if (!items.length) { showToast('لا توجد بيانات للطباعة', 'error'); return; }
+  const date = new Date().toLocaleDateString('ar-IQ');
+  const grand = items.reduce((s,i) => s + i.total, 0);
+
+  const rows = items.map((it, i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td>${escHtml(it.name)}</td>
+      <td>${it.qty} ${escHtml(it.unit)}</td>
+      <td>${it.price.toLocaleString()}</td>
+      <td><strong>${it.total.toLocaleString()}</strong></td>
+    </tr>`).join('');
+
+  const w = window.open('', '_blank', 'width=800,height=600');
+  w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"><title>قائمة التكاليف</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+body{font-family:'Cairo',Arial,sans-serif;direction:rtl;padding:28px;color:#000;font-size:13px}
+h1{color:#1C3557;font-size:18px;margin-bottom:2px}
+.sub{color:#666;font-size:12px;margin-bottom:18px}
+table{width:100%;border-collapse:collapse}
+th{background:#1C3557;color:white;padding:7px 9px;font-size:12px}
+td{border:1px solid #ddd;padding:6px 9px}
+tr:nth-child(even) td{background:#f5f7fa}
+.foot td{background:#E36F1E;color:white;font-weight:700;font-size:13px}
+button{margin-top:14px;background:#1C3557;color:white;padding:8px 20px;border:none;
+  border-radius:7px;font-size:13px;cursor:pointer;font-family:Cairo,Arial}
+@media print{button{display:none}}
+</style></head><body>
+<h1>📋 قائمة التكاليف التدريبية</h1>
+<p class="sub">تاريخ الطباعة: ${date} — عدد المواد: ${items.length}</p>
+<table>
+<thead><tr><th>#</th><th>اسم المادة</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
+<tbody>${rows}</tbody>
+<tfoot><tr class="foot"><td colspan="4">المجموع الكلي</td><td>${grand.toLocaleString()} د.ع</td></tr></tfoot>
 </table>
-</body></html>`;
+<button onclick="window.print()">🖨️ طباعة</button>
+</body></html>`);
+  w.document.close();
+}
 
-  const blob = new Blob(['\uFEFF' + html], {
-    type: 'application/vnd.ms-excel;charset=utf-8'
-  });
+/* ─── Utilities ────────────────────────────────────────────── */
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function dlBlob(content, type, filename) {
+  const blob = new Blob([content], { type });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  const d    = new Date().toISOString().slice(0, 10);
-  a.href     = url;
-  a.download = `تكاليف_تدريبية_${d}.xls`;
-  a.click();
-  URL.revokeObjectURL(url);
-
-  showToast('📊 تم تصدير ملف Excel بنجاح', 'success');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// ────────────────────────────────
-// Print
-// ────────────────────────────────
-function printList() {
-  if (items.length === 0) {
-    showToast('لا توجد بيانات للطباعة', 'error');
-    return;
-  }
-
-  const date       = new Date().toLocaleDateString('ar-IQ');
-  const grandTotal = items.reduce((s, i) => s + i.total, 0);
-
-  let rows = items.map((item, idx) => `
-    <tr>
-      <td style="text-align:center">${idx + 1}</td>
-      <td>${escHtml(item.name)}</td>
-      <td style="text-align:center">${item.qty} ${escHtml(item.unit)}</td>
-      <td style="text-align:left">${item.price.toLocaleString()} د.ع</td>
-      <td style="text-align:left;font-weight:700">${item.total.toLocaleString()} د.ع</td>
-    </tr>
-  `).join('');
-
-  const printWin = window.open('', '_blank', 'width=800,height=600');
-  printWin.document.write(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<title>قائمة التكاليف التدريبية</title>
-<style>
-  body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 30px; color: #000; }
-  h1 { color: #1C3557; font-size: 20px; margin-bottom: 4px; }
-  .date { color: #666; font-size: 13px; margin-bottom: 20px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { background: #1C3557; color: white; padding: 8px 10px; }
-  td { border: 1px solid #ddd; padding: 7px 10px; }
-  tr:nth-child(even) { background: #f5f5f5; }
-  .total-row { background: #E36F1E !important; color: white; font-weight: 700; font-size: 15px; }
-  .total-row td { border-color: #E36F1E; color: white; }
-  @media print { button { display: none; } }
-</style>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet"/>
-</head>
-<body>
-<h1>📋 قائمة التكاليف التدريبية</h1>
-<p class="date">تاريخ الطباعة: ${date} — عدد المواد: ${items.length}</p>
-<table>
-  <thead>
-    <tr>
-      <th>#</th><th>اسم المادة</th><th>الكمية والوحدة</th><th>سعر الوحدة</th><th>الإجمالي</th>
-    </tr>
-  </thead>
-  <tbody>${rows}</tbody>
-  <tfoot>
-    <tr class="total-row">
-      <td colspan="4" style="text-align:center">المجموع الكلي</td>
-      <td style="text-align:left">${grandTotal.toLocaleString()} د.ع</td>
-    </tr>
-  </tfoot>
-</table>
-<br>
-<button onclick="window.print()" style="background:#1C3557;color:white;padding:10px 24px;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:Cairo,Arial">🖨️ طباعة</button>
-</body>
-</html>`);
-  printWin.document.close();
+/* ─── Install Logic ────────────────────────────────────────── */
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
-// ────────────────────────────────
-// Enter Key Support
-// ────────────────────────────────
-function setupEnterKey() {
-  ['itemName', 'itemPrice', 'itemQty'].forEach(id => {
-    $(id).addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        addItem();
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    navigator.standalone === true;
+}
+
+function handleInstall() {
+  if (deferredInstallPrompt) {
+    // Android / Chrome: native prompt available
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.then(({ outcome }) => {
+      if (outcome === 'accepted') {
+        showToast('🎉 تم تثبيت التطبيق!', 'success');
+        hideTip();
       }
+      deferredInstallPrompt = null;
     });
+  } else if (isIOS()) {
+    // iOS: show manual instructions
+    $('iosModal').style.display = 'flex';
+  } else {
+    // Other browsers: generic message
+    showToast('💡 افتح القائمة ← "إضافة إلى الشاشة الرئيسية"', 'info', 4000);
+  }
+}
+
+function closeIosModal() { $('iosModal').style.display = 'none'; }
+
+function showTip() {
+  if (isStandalone()) return;   // already installed
+  const tip = $('installTip');
+  tip.style.display = 'block';
+  const msg = $('installTipMsg');
+  if (deferredInstallPrompt) {
+    msg.textContent = 'اضغط "تثبيت" لإضافة التطبيق على جهازك';
+  } else if (isIOS()) {
+    msg.textContent = 'اضغط لرؤية خطوات التثبيت على iPhone / iPad';
+  } else {
+    msg.textContent = 'يمكنك تثبيت التطبيق للعمل بدون إنترنت';
+  }
+}
+
+function closeTip() { $('installTip').style.display = 'none'; }
+function hideTip()  { $('installTip').style.display = 'none'; }
+
+/* ─── Offline badge ────────────────────────────────────────── */
+function updateOnline() {
+  $('offlineBadge').classList.toggle('visible', !navigator.onLine);
+}
+
+/* ─── Service Worker ───────────────────────────────────────── */
+function registerSW() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+      .then(r => console.log('SW:', r.scope))
+      .catch(e => console.warn('SW failed:', e));
+  }
+}
+
+/* ─── Enter key ────────────────────────────────────────────── */
+function setupEnter() {
+  ['itemName','itemPrice','itemQty'].forEach(id => {
+    $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } });
   });
 }
 
-// ────────────────────────────────
-// Offline Detection
-// ────────────────────────────────
-function updateOnlineStatus() {
-  const badge = $('offlineBadge');
-  if (!navigator.onLine) {
-    badge.classList.add('visible');
-  } else {
-    badge.classList.remove('visible');
-  }
-}
+/* ─── Init ─────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  items = load();
+  render();
+  setupEnter();
+  updateOnline();
+  registerSW();
 
-// ────────────────────────────────
-// PWA Install
-// ────────────────────────────────
-function setupInstallPrompt() {
+  window.addEventListener('online',  updateOnline);
+  window.addEventListener('offline', updateOnline);
+
+  // Capture Chrome/Android install prompt
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     deferredInstallPrompt = e;
-    $('installBanner').style.display = 'block';
-  });
-
-  $('installBtn').addEventListener('click', async () => {
-    if (!deferredInstallPrompt) return;
-    deferredInstallPrompt.prompt();
-    const { outcome } = await deferredInstallPrompt.userChoice;
-    if (outcome === 'accepted') {
-      showToast('🎉 تم تثبيت التطبيق بنجاح!', 'success');
-      $('installBanner').style.display = 'none';
-    }
-    deferredInstallPrompt = null;
+    showTip();
   });
 
   window.addEventListener('appinstalled', () => {
-    $('installBanner').style.display = 'none';
+    hideTip();
+    deferredInstallPrompt = null;
   });
-}
 
-// ────────────────────────────────
-// Service Worker Registration
-// ────────────────────────────────
-function registerServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
-      .then(reg => console.log('SW registered:', reg.scope))
-      .catch(err => console.warn('SW registration failed:', err));
+  // Show install tip after 3 sec for iOS users too
+  if (!isStandalone()) {
+    setTimeout(showTip, 3000);
   }
-}
 
-// ────────────────────────────────
-// Init
-// ────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  // Load saved data
-  items = loadFromLocalStorage();
-  renderItems();
-
-  // Setup
-  setupEnterKey();
-  setupInstallPrompt();
-  updateOnlineStatus();
-  registerServiceWorker();
-
-  window.addEventListener('online',  updateOnlineStatus);
-  window.addEventListener('offline', updateOnlineStatus);
-
-  // Focus first input
-  setTimeout(() => $('itemName').focus(), 300);
+  setTimeout(() => $('itemName').focus(), 200);
 });

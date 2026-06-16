@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -26,10 +26,11 @@
         <h1>حاسبة التكاليف التدريبية</h1>
         <p>إدارة مواد الورش والمراكز التدريبية</p>
       </div>
+      <button class="btn-install-header" id="installHeaderBtn" onclick="handleInstall()" title="تثبيت التطبيق">
+        📲
+      </button>
     </div>
-    <div class="offline-badge" id="offlineBadge">
-      <span>📡 غير متصل</span>
-    </div>
+    <div class="offline-badge" id="offlineBadge">📡 غير متصل</div>
   </header>
 
   <!-- Main Content -->
@@ -37,168 +38,108 @@
 
     <!-- Add Item Form -->
     <section class="card add-card">
-      <h2 class="section-title">
-        <span class="title-icon">➕</span>
-        إضافة مادة جديدة
-      </h2>
-      <div class="form-row">
-        <div class="form-group">
+      <div class="form-inline">
+        <div class="form-group fg-name">
           <label for="itemName">اسم المادة</label>
-          <input
-            type="text"
-            id="itemName"
-            placeholder="مثال: أقلام تحديد، ورق A4، بروجيكتر..."
-            autocomplete="off"
-            inputmode="text"
-          />
+          <input type="text" id="itemName" placeholder="أقلام، ورق A4، بروجيكتر..." autocomplete="off" inputmode="text" />
         </div>
-        <div class="form-group price-group">
-          <label for="itemPrice">السعر (دينار)</label>
-          <div class="price-input-wrap">
-            <input
-              type="number"
-              id="itemPrice"
-              placeholder="0"
-              min="0"
-              step="any"
-              inputmode="decimal"
-            />
-            <span class="currency-badge">IQD</span>
-          </div>
+        <div class="form-group fg-price">
+          <label for="itemPrice">السعر (د.ع)</label>
+          <input type="number" id="itemPrice" placeholder="0" min="0" step="any" inputmode="decimal" />
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group qty-group">
+        <div class="form-group fg-qty">
           <label for="itemQty">الكمية</label>
-          <input
-            type="number"
-            id="itemQty"
-            placeholder="1"
-            min="1"
-            value="1"
-            inputmode="numeric"
-          />
+          <input type="number" id="itemQty" value="1" min="1" inputmode="numeric" />
         </div>
-        <div class="form-group unit-group">
+        <div class="form-group fg-unit">
           <label for="itemUnit">الوحدة</label>
           <select id="itemUnit">
-            <option value="قطعة">قطعة</option>
-            <option value="حزمة">حزمة</option>
-            <option value="ورقة">ورقة</option>
-            <option value="رزمة">رزمة</option>
-            <option value="علبة">علبة</option>
-            <option value="متر">متر</option>
-            <option value="كيلو">كيلو</option>
-            <option value="لتر">لتر</option>
-            <option value="يوم">يوم</option>
-            <option value="جلسة">جلسة</option>
-            <option value="أخرى">أخرى</option>
+            <option>قطعة</option><option>حزمة</option><option>ورقة</option>
+            <option>رزمة</option><option>علبة</option><option>متر</option>
+            <option>كيلو</option><option>لتر</option><option>يوم</option>
+            <option>جلسة</option><option>أخرى</option>
           </select>
         </div>
+        <button class="btn btn-add" onclick="addItem()">➕ إضافة</button>
       </div>
-      <button class="btn btn-primary btn-add" id="addBtn" onclick="addItem()">
-        <span>➕</span> إضافة المادة
-      </button>
     </section>
 
     <!-- Items List -->
-    <section class="card items-card" id="itemsSection">
+    <section class="card items-card">
       <div class="section-header">
-        <h2 class="section-title">
-          <span class="title-icon">📦</span>
-          قائمة المواد
-          <span class="item-count" id="itemCount">0</span>
-        </h2>
-        <button class="btn btn-ghost btn-sm" onclick="clearAll()" id="clearBtn" style="display:none">
-          🗑️ مسح الكل
-        </button>
+        <span class="section-title">📦 المواد <span class="item-count" id="itemCount">0</span></span>
+        <button class="btn btn-ghost btn-sm" onclick="clearAll()" id="clearBtn" style="display:none">🗑️ مسح الكل</button>
       </div>
-
-      <!-- Empty State -->
       <div class="empty-state" id="emptyState">
         <div class="empty-icon">🛒</div>
-        <p>لا توجد مواد مضافة بعد</p>
-        <p class="empty-sub">أضف أول مادة من الحقول أعلاه</p>
+        <p>أضف أول مادة من الحقول أعلاه</p>
       </div>
-
-      <!-- Items Container -->
       <div class="items-list" id="itemsList"></div>
     </section>
 
-    <!-- Summary Card -->
-    <section class="card summary-card" id="summaryCard">
-      <h2 class="section-title">
-        <span class="title-icon">💰</span>
-        الملخص المالي
-      </h2>
-      <div class="summary-grid">
-        <div class="summary-item">
-          <span class="summary-label">عدد المواد</span>
-          <span class="summary-value" id="totalItems">0</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">إجمالي الكميات</span>
-          <span class="summary-value" id="totalQty">0</span>
-        </div>
-        <div class="summary-divider"></div>
-        <div class="summary-total">
-          <span class="total-label">المجموع الكلي</span>
-          <span class="total-value" id="grandTotal">0</span>
-          <span class="total-currency">دينار عراقي</span>
-        </div>
+    <!-- Summary -->
+    <section class="summary-card">
+      <div class="summary-row">
+        <span>عدد المواد: <strong id="totalItems">0</strong></span>
+        <span>إجمالي الكميات: <strong id="totalQty">0</strong></span>
+      </div>
+      <div class="summary-total-row">
+        <span class="total-label">المجموع الكلي</span>
+        <span class="total-value"><span id="grandTotal">0</span> <small>د.ع</small></span>
       </div>
     </section>
 
     <!-- Action Buttons -->
     <section class="actions-section">
-      <h3 class="actions-title">إجراءات الملف</h3>
       <div class="actions-grid">
         <button class="btn btn-action btn-save" onclick="saveJSON()">
-          <span class="btn-icon">💾</span>
-          <span class="btn-label">حفظ JSON</span>
-          <span class="btn-sub">ملف النسخ الاحتياطي</span>
+          <span class="btn-icon">💾</span><span class="btn-label">حفظ JSON</span>
         </button>
-        <button class="btn btn-action btn-import" onclick="document.getElementById('importFile').click()">
-          <span class="btn-icon">📂</span>
-          <span class="btn-label">استيراد</span>
-          <span class="btn-sub">تحميل ملف JSON</span>
+        <button class="btn btn-action btn-import" onclick="$('importFile').click()">
+          <span class="btn-icon">📂</span><span class="btn-label">استيراد</span>
         </button>
-        <button class="btn btn-action btn-excel" onclick="exportExcel()">
-          <span class="btn-icon">📊</span>
-          <span class="btn-label">تصدير Excel</span>
-          <span class="btn-sub">ملف جدول بيانات</span>
+        <button class="btn btn-action btn-excel" onclick="exportCSV()">
+          <span class="btn-icon">📊</span><span class="btn-label">تصدير CSV</span>
         </button>
         <button class="btn btn-action btn-print" onclick="printList()">
-          <span class="btn-icon">🖨️</span>
-          <span class="btn-label">طباعة</span>
-          <span class="btn-sub">نسخة للطباعة</span>
+          <span class="btn-icon">🖨️</span><span class="btn-label">طباعة</span>
         </button>
       </div>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)" />
     </section>
 
-    <!-- Install Banner -->
-    <div class="install-banner" id="installBanner" style="display:none">
-      <div class="install-text">
-        <span class="install-icon">📱</span>
-        <div>
-          <strong>تثبيت التطبيق</strong>
-          <p>ثبّت التطبيق على شاشتك الرئيسية للوصول السريع وللعمل بدون إنترنت</p>
+    <!-- Install Guide Modal Trigger -->
+    <div class="install-tip" id="installTip" style="display:none">
+      <div class="install-tip-inner">
+        <span class="install-tip-icon">📲</span>
+        <div class="install-tip-text">
+          <strong>تثبيت التطبيق على جهازك</strong>
+          <p id="installTipMsg">اضغط على زر التثبيت لإضافة التطبيق</p>
         </div>
-      </div>
-      <div class="install-actions">
-        <button class="btn btn-install" id="installBtn">تثبيت</button>
-        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('installBanner').style.display='none'">لاحقاً</button>
+        <button class="btn btn-install-confirm" id="installTipBtn" onclick="handleInstall()">تثبيت</button>
+        <button class="btn-close-tip" onclick="closeTip()">✕</button>
       </div>
     </div>
 
   </main>
 
-  <!-- Toast Notification -->
-  <div class="toast" id="toast"></div>
+  <!-- Install Modal (iOS manual instructions) -->
+  <div class="modal-overlay" id="iosModal" style="display:none" onclick="closeIosModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <strong>📱 تثبيت على iPhone / iPad</strong>
+        <button onclick="closeIosModal()" class="modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-step"><span class="step-num">1</span><span>اضغط على زر <strong>المشاركة</strong> <span class="share-icon">⎙</span> في الأسفل</span></div>
+        <div class="modal-step"><span class="step-num">2</span><span>اختر <strong>"إضافة إلى الشاشة الرئيسية"</strong></span></div>
+        <div class="modal-step"><span class="step-num">3</span><span>اضغط <strong>إضافة</strong> في الأعلى</span></div>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="closeIosModal()">حسناً، فهمت</button>
+    </div>
+  </div>
 
-  <!-- Print Template (hidden) -->
-  <div class="print-only" id="printTemplate" style="display:none"></div>
+  <div class="toast" id="toast"></div>
 
   <script src="app.js"></script>
 </body>
